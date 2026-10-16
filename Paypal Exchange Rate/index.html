@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="color-scheme" content="light dark"/><title>USD to PHP · PayPal estimate</title>
+<style>
+:root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark;font-synthesis:none}*{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:light-dark(#262626,#f4f4f4)}.card{border:1px solid light-dark(#e9e9e7,#383838);border-radius:16px;background:light-dark(#fff,#202020);padding:22px;max-width:580px;min-height:228px}.eyebrow{font-size:11px;font-weight:700;letter-spacing:.11em;color:light-dark(#777,#b4b4b4);text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:8px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22a06b;margin-right:6px}.main{margin:14px 0 2px;font-size:clamp(30px,7vw,45px);font-weight:750;letter-spacing:-.045em;line-height:1.15;font-variant-numeric:tabular-nums}.sub{font-size:12px;color:light-dark(#747474,#b9b9b9)}.line{height:1px;background:light-dark(#ededeb,#373737);margin:19px 0 13px}.stats{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.stat-label{font-size:11px;color:light-dark(#777,#aaa)}.stat-value{font-size:15px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:4px}.converter{margin-top:17px;padding:15px;border:1px solid light-dark(#e9e9e7,#444);border-radius:12px;background:light-dark(#fafaf9,#262626)}.input-label{font-size:12px;color:light-dark(#707070,#bdbdbd);display:block;margin-bottom:7px}.amount-row{display:flex;align-items:center;border:1px solid light-dark(#dededb,#555);border-radius:9px;background:light-dark(#fff,#202020);padding:0 12px;gap:8px}.amount-row span{font-size:17px;font-weight:650}.amount-row input{flex:1;min-width:0;padding:10px 0;background:transparent;border:0;outline:0;color:inherit;font:600 19px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}.total-label{font-size:11px;margin-top:15px;color:light-dark(#777,#aaa)}.total-value{font-size:clamp(24px,6vw,32px);font-weight:750;letter-spacing:-.025em;margin-top:2px;font-variant-numeric:tabular-nums}.converter-note{font-size:10px;color:light-dark(#898989,#aaa);margin-top:5px}.foot{margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:10px;color:light-dark(#898989,#aaa)}button{background:transparent;border:1px solid light-dark(#e5e5e5,#454545);border-radius:8px;color:inherit;padding:6px 10px;cursor:pointer;font:inherit;font-size:11px}button:hover{background:light-dark(#f6f6f6,#333)}#error{color:#b85444;font-size:12px;margin-top:8px}a{color:inherit;text-decoration:underline;text-decoration-color:#aaa}@media(max-width:360px){.card{padding:16px}.foot{align-items:flex-start;flex-direction:column}}
+</style></head><body><section class="card" aria-label="Estimated PayPal exchange rate widget"><div class="eyebrow"><span><span class="dot"></span>USD → PHP</span><span>PAYPAL ESTIMATE</span></div><div class="main" id="estimate" aria-live="polite">Loading…</div><div class="sub">Estimated pesos per US dollar · fixed 3.31% adjustment</div><div class="line"></div><div class="stats"><div><div class="stat-label">Reference market rate</div><div class="stat-value" id="market">—</div></div><div><div class="stat-label">Estimated difference</div><div class="stat-value">−3.31%</div></div></div><div class="converter"><label class="input-label" for="usd">Amount to convert (USD)</label><div class="amount-row"><span>$</span><input id="usd" type="number" min="0" step="any" inputmode="decimal" value="100" aria-label="USD amount"/></div><div class="total-label">Estimated amount you’ll receive (PHP)</div><div class="total-value" id="total" aria-live="polite">Calculating…</div><div class="converter-note">Uses the estimated PayPal rate above; excludes any additional withdrawal or bank fees.</div></div><div class="foot"><span id="updated">Checking the latest published rate…</span><button type="button" id="refresh">↻ Refresh</button></div><div id="error" role="status"></div></section>
+<script>
+const FACTOR=0.9669;
+const sources=[
+ {name:'Frankfurter',url:'https://api.frankfurter.dev/v2/rate/usd/php',parse:d=>({rate:Number(d.rate),date:d.date})},
+ {name:'Currency API',url:'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',parse:d=>({rate:Number(d.usd?.php),date:d.date})},
+ {name:'Currency API backup',url:'https://latest.currency-api.pages.dev/v1/currencies/usd.json',parse:d=>({rate:Number(d.usd?.php),date:d.date})}
+];
+const estimate=document.getElementById('estimate'), market=document.getElementById('market'), updated=document.getElementById('updated'), error=document.getElementById('error'), button=document.getElementById('refresh'), usd=document.getElementById('usd'), total=document.getElementById('total'); let currentRate=null;
+function n(v,d=5){return '₱'+Number(v).toLocaleString('en-PH',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function calculate(){const v=Number(usd.value);total.textContent=usd.value===''?'Enter a USD amount':!Number.isFinite(v)||v<0?'Enter a valid amount':currentRate===null?'Rate unavailable':n(v*currentRate,2);}
+usd.addEventListener('input',calculate);
+async function fetchOne(source){
+ const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),8000);
+ try{
+  const r=await fetch(source.url,{signal:controller.signal,cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  const data=source.parse(await r.json());
+  if(!Number.isFinite(data.rate)||data.rate<=0)throw Error('Invalid rate data');
+  return {...data,source:source.name};
+ }finally{clearTimeout(timeout);}
+}
+async function load(){
+ button.disabled=true;button.textContent='Checking…';error.textContent='';
+ let issues=[];
+ try{
+  let data;
+  for(const source of sources){try{data=await fetchOne(source);break}catch(e){issues.push(source.name+': '+(e?.message||'network error'));}}
+  if(!data)throw Error(issues.join(' | '));
+  currentRate=data.rate*FACTOR;
+  estimate.textContent=n(currentRate);market.textContent=n(data.rate);calculate();
+  updated.textContent='Source: '+data.source+' · Rate date: '+(data.date||'unknown')+' · Checked: '+new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'})+' PHT';
+ }catch(e){
+  error.textContent='Could not access exchange-rate providers. '+(location.protocol==='file:'?'This page is opened as a local file; try hosting it at an HTTPS address. ':'')+'Details: '+(e?.message||'network error');
+  if(currentRate===null){estimate.textContent='Unavailable';updated.textContent='No rate has loaded';calculate();}
+  else{updated.textContent+=' · Refresh failed; showing previous rate';}
+ }finally{button.disabled=false;button.textContent='↻ Refresh';}
+}
+button.addEventListener('click',load);load();setInterval(load,30*60*1000);
+</script></body></html>
